@@ -1,5 +1,4 @@
 // netlify/functions/orders.js
-// Fetches order data from Shopify using client credentials grant
 
 exports.handler = async function(event, context) {
 
@@ -18,7 +17,7 @@ exports.handler = async function(event, context) {
   }
 
   try {
-    // Correct endpoint for Dev Dashboard client credentials grant
+    // Get access token
     const tokenRes = await fetch(`https://${SHOP_DOMAIN}/admin/oauth/access_token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -34,21 +33,21 @@ exports.handler = async function(event, context) {
       throw new Error(`Token failed ${tokenRes.status}: ${errText}`);
     }
 
-    const tokenData = await tokenRes.json();
-    const access_token = tokenData.access_token;
+    const { access_token } = await tokenRes.json();
 
-    // Fetch orders via GraphQL Admin API
+    // Fetch ALL orders — no status filter so nothing gets excluded
     let orders = [];
     let cursor = null;
     let hasNext = true;
 
     while (hasNext) {
       const query = `{
-        orders(first: 250, ${cursor ? `after: "${cursor}",` : ''} query: "financial_status:paid") {
+        orders(first: 250${cursor ? `, after: "${cursor}"` : ''}) {
           pageInfo { hasNextPage endCursor }
           edges {
             node {
               id
+              displayFinancialStatus
               lineItems(first: 50) {
                 edges {
                   node {
@@ -74,6 +73,12 @@ exports.handler = async function(event, context) {
       if (!res.ok) throw new Error('GraphQL fetch failed: ' + res.status);
 
       const json = await res.json();
+
+      // Log any GraphQL errors
+      if (json.errors) {
+        throw new Error('GraphQL errors: ' + JSON.stringify(json.errors));
+      }
+
       const page = json?.data?.orders;
       if (!page) break;
 
@@ -83,6 +88,7 @@ exports.handler = async function(event, context) {
     }
 
     // Add product tags here once you have your product list
+    // e.g. const QUALIFYING_TAGS = ['this-builds-wells'];
     const QUALIFYING_TAGS = [];
 
     let shirts = 0;
@@ -108,7 +114,7 @@ exports.handler = async function(event, context) {
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ shirts: 1, people: 1, error: err.message })
+      body: JSON.stringify({ shirts: 0, people: 0, error: err.message })
     };
   }
 };
