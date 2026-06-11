@@ -1,4 +1,5 @@
 // netlify/functions/orders.js
+// Uses REST Admin API (more permissive with client credentials scope)
 
 exports.handler = async function(event, context) {
 
@@ -35,56 +36,27 @@ exports.handler = async function(event, context) {
 
     const { access_token } = await tokenRes.json();
 
-    // Fetch ALL orders — no status filter so nothing gets excluded
+    // Fetch orders via REST API — paginate through all
     let orders = [];
-    let cursor = null;
-    let hasNext = true;
+    let url = `https://${SHOP_DOMAIN}/admin/api/2024-10/orders.json?status=any&limit=250`;
 
-    while (hasNext) {
-      const query = `{
-        orders(first: 250${cursor ? `, after: "${cursor}"` : ''}) {
-          pageInfo { hasNextPage endCursor }
-          edges {
-            node {
-              id
-              displayFinancialStatus
-              lineItems(first: 50) {
-                edges {
-                  node {
-                    quantity
-                    product { tags }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }`;
-
-      const res = await fetch(`https://${SHOP_DOMAIN}/admin/api/2024-10/graphql.json`, {
-        method: 'POST',
+    while (url) {
+      const res = await fetch(url, {
         headers: {
           'X-Shopify-Access-Token': access_token,
           'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ query })
+        }
       });
 
-      if (!res.ok) throw new Error('GraphQL fetch failed: ' + res.status);
+      if (!res.ok) throw new Error(`Orders fetch failed ${res.status}: ` + await res.text());
 
-      const json = await res.json();
+      const data = await res.json();
+      orders = orders.concat(data.orders || []);
 
-      // Log any GraphQL errors
-      if (json.errors) {
-        throw new Error('GraphQL errors: ' + JSON.stringify(json.errors));
-      }
-
-      const page = json?.data?.orders;
-      if (!page) break;
-
-      orders = orders.concat(page.edges.map(e => e.node));
-      hasNext = page.pageInfo.hasNextPage;
-      cursor = page.pageInfo.endCursor;
+      // Paginate via Link header
+      const link = res.headers.get('Link') || '';
+      const next = link.match(/<([^>]+)>;\s*rel="next"/);
+      url = next ? next[1] : null;
     }
 
     // Add product tags here once you have your product list
@@ -95,10 +67,10 @@ exports.handler = async function(event, context) {
     const people = orders.length;
 
     orders.forEach(order => {
-      order.lineItems.edges.forEach(({ node: item }) => {
-        const tags = item.product?.tags || [];
+      (order.line_items || []).forEach(item => {
+        const productTags = (item.product_tags || '').split(', ').filter(Boolean);
         const qualifies = QUALIFYING_TAGS.length === 0 ||
-          QUALIFYING_TAGS.some(t => tags.includes(t));
+          QUALIFYING_TAGS.some(t => productTags.includes(t));
         if (qualifies) shirts += item.quantity;
       });
     });
