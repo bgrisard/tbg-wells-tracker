@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>this builds wells — impact tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --black: #0a0a0a;
+    --white: #f5f4f0;
+    --water: #1B6CA8;
+    --water-mid: #5a9fd4;
+    --water-pale: #c8dff2;
+    --gray: #888;
+    --rule: #d0cec8;
+  }
+  body {
+    background: var(--white);
+    color: var(--black);
+    font-family: 'Inter', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+  }
+
+  /* live banner */
+  .live-banner {
+    background: var(--black);
+    padding: 12px 40px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .pulse {
+    position: relative;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+  .pulse::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: var(--water);
+    animation: ring 2s ease-out infinite;
+  }
+  .pulse::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 50%;
+    background: var(--water-mid);
+  }
+  @keyframes ring {
+    0% { transform: scale(1); opacity: 1; }
+    70% { transform: scale(2.2); opacity: 0; }
+    100% { transform: scale(1); opacity: 0; }
+  }
+  .live-text {
+    font-family: 'Courier Prime', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--white);
+  }
+  .live-text em { color: var(--water-mid); font-style: normal; }
+  .live-updated {
+    margin-left: auto;
+    font-family: 'Courier Prime', monospace;
+    font-size: 10px;
+    color: #555;
+    letter-spacing: 0.06em;
+  }
+
+  /* hero */
+  .hero {
+    padding: 48px 40px 40px;
+    border-bottom: 1px solid var(--rule);
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 40px;
+    align-items: end;
+  }
+  .headline {
+    font-family: 'Courier Prime', monospace;
+    font-size: clamp(44px, 7vw, 80px);
+    font-weight: 700;
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+  }
+  .headline em { font-style: italic; color: var(--water); }
+  .hero-sub { font-size: 13px; color: var(--gray); line-height: 1.7; }
+  .hero-sub strong { color: var(--black); font-weight: 500; }
+
+  /* metrics */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-bottom: 1px solid var(--rule);
+  }
+  .metric {
+    padding: 32px 36px 28px;
+    border-right: 1px solid var(--rule);
+  }
+  .metric:last-child { border-right: none; }
+  .metric-eye {
+    font-family: 'Courier Prime', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gray);
+    margin-bottom: 10px;
+  }
+  .metric-val {
+    font-family: 'Courier Prime', monospace;
+    font-size: clamp(32px, 4.5vw, 56px);
+    font-weight: 700;
+    line-height: 1;
+    color: var(--black);
+  }
+  .metric-val.blue { color: var(--water); }
+  .metric-lbl { font-size: 12px; color: var(--gray); margin-top: 6px; }
+
+  /* progress */
+  .progress { padding: 48px 40px; border-bottom: 1px solid var(--rule); }
+  .progress-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 28px;
+  }
+  .progress-title {
+    font-family: 'Courier Prime', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gray);
+  }
+  .progress-frac {
+    font-family: 'Courier Prime', monospace;
+    font-size: 13px;
+    color: var(--black);
+  }
+  .progress-frac span { color: var(--water); font-weight: 700; }
+  .segments { display: flex; gap: 3px; margin-bottom: 8px; }
+  .seg {
+    flex: 1;
+    height: 44px;
+    background: var(--rule);
+    position: relative;
+    overflow: hidden;
+  }
+  .seg.funded { background: var(--water); }
+  .seg-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: var(--water);
+    width: 0%;
+    transition: width 1.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+  .seg-check {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Courier Prime', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: rgba(245,244,240,0.9);
+    opacity: 0;
+  }
+  .seg.funded .seg-check { opacity: 1; }
+  .seg-nums { display: flex; gap: 3px; }
+  .seg-num {
+    flex: 1;
+    text-align: center;
+    font-family: 'Courier Prime', monospace;
+    font-size: 10px;
+    color: var(--gray);
+    padding-top: 6px;
+  }
+  .seg-num.active { color: var(--water); font-weight: 700; }
+  .progress-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: 28px;
+    gap: 32px;
+  }
+  .raised-big {
+    font-family: 'Courier Prime', monospace;
+    font-size: 38px;
+    font-weight: 700;
+    color: var(--water);
+    line-height: 1;
+  }
+  .raised-sub {
+    font-size: 12px;
+    color: var(--gray);
+    margin-top: 5px;
+    font-family: 'Courier Prime', monospace;
+  }
+  .progress-note {
+    font-size: 12px;
+    color: var(--gray);
+    line-height: 1.7;
+    max-width: 340px;
+    text-align: right;
+  }
+  .progress-note strong { color: var(--black); font-weight: 500; }
+
+  /* well illustration */
+  .well-section {
+    padding: 48px 40px;
+    border-bottom: 1px solid var(--rule);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    align-items: center;
+  }
+  .well-art { display: flex; flex-direction: column; align-items: center; }
+  .well-art-lbl {
+    font-family: 'Courier Prime', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gray);
+    margin-bottom: 20px;
+  }
+  .well-svg { width: 100%; max-width: 240px; }
+  .to-go { font-family: 'Courier Prime', monospace; text-align: center; margin-top: 20px; }
+  .to-go .n { font-size: 42px; font-weight: 700; display: block; line-height: 1; color: var(--black); }
+  .to-go .l { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray); margin-top: 5px; }
+  .side-stats { display: flex; flex-direction: column; gap: 28px; }
+  .sstat { border-left: 2px solid var(--rule); padding-left: 20px; }
+  .sstat.blue { border-left-color: var(--water); }
+  .sstat-val { font-family: 'Courier Prime', monospace; font-size: 30px; font-weight: 700; line-height: 1; color: var(--black); }
+  .sstat-val.blue { color: var(--water); }
+  .sstat-lbl { font-size: 12px; color: var(--gray); margin-top: 5px; line-height: 1.5; }
+
+  /* scripture */
+  .scripture {
+    padding: 24px 40px;
+    background: var(--black);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .scripture-text { font-family: 'Courier Prime', monospace; font-size: 14px; font-style: italic; color: var(--water-pale); }
+  .scripture-ref { font-family: 'Courier Prime', monospace; font-size: 11px; color: #555; white-space: nowrap; }
+
+  /* footer */
+  .footer {
+    padding: 18px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid var(--rule);
+  }
+  .footer-brand { font-family: 'Courier Prime', monospace; font-size: 11px; color: var(--gray); }
+  .footer-url { font-family: 'Courier Prime', monospace; font-size: 11px; color: var(--gray); text-decoration: none; }
+  .footer-url:hover { color: var(--water); }
+
+  /* loading skeleton */
+  .skeleton {
+    background: linear-gradient(90deg, var(--rule) 25%, #e8e6e0 50%, var(--rule) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 2px;
+    display: inline-block;
+  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* mobile */
+  @media (max-width: 680px) {
+    .live-banner { padding: 12px 20px; }
+    .live-text { font-size: 13px; letter-spacing: 0.1em; }
+    .hero { grid-template-columns: 1fr; padding: 32px 20px; gap: 20px; }
+    .metrics { grid-template-columns: 1fr; }
+    .metric { border-right: none; border-bottom: 1px solid var(--rule); padding: 24px 20px; }
+    .metric:last-child { border-bottom: none; }
+    .progress { padding: 32px 20px; }
+    .progress-meta { flex-direction: column; align-items: flex-start; gap: 16px; }
+    .progress-note { text-align: left; max-width: 100%; }
+    .well-section { grid-template-columns: 1fr; padding: 32px 20px; gap: 32px; }
+    .scripture { padding: 20px; flex-direction: column; gap: 8px; }
+    .scripture-ref { align-self: flex-end; }
+    .footer { padding: 18px 20px; }
+    .segments { gap: 2px; }
+    .seg { height: 36px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- live banner -->
+<div class="live-banner">
+  <div class="pulse"></div>
+  <div class="live-text">live <em>impact</em></div>
+  <div class="live-updated" id="live-updated"></div>
+</div>
+
+<!-- hero -->
+<div class="hero">
+  <h1 class="headline">this<br>builds<br><em>wells.</em></h1>
+  <p class="hero-sub">
+    every shirt funds access to <strong>clean, safe water</strong> for communities that need it most.
+    696 million people lack safe water — your purchase changes that.
+    <br><br>
+    each well serves up to <strong>300 people</strong> for decades.
+  </p>
+</div>
+
+<!-- metrics -->
+<div class="metrics">
+  <div class="metric">
+    <div class="metric-eye">people involved</div>
+    <div class="metric-val" id="m-people"><span class="skeleton" style="width:60px;height:48px;">&nbsp;</span></div>
+    <div class="metric-lbl">supporters</div>
+  </div>
+  <div class="metric">
+    <div class="metric-eye">funds raised</div>
+    <div class="metric-val blue" id="m-funds"><span class="skeleton" style="width:100px;height:48px;">&nbsp;</span></div>
+    <div class="metric-lbl">toward clean water</div>
+  </div>
+  <div class="metric">
+    <div class="metric-eye">goal reached</div>
+    <div class="metric-val" id="m-pct"><span class="skeleton" style="width:80px;height:48px;">&nbsp;</span></div>
+    <div class="metric-lbl">of $15,000 per well</div>
+  </div>
+</div>
+
+<!-- progress -->
+<div class="progress">
+  <div class="progress-head">
+    <div class="progress-title">well funding progress</div>
+    <div class="progress-frac">well <span id="well-cur">1</span> of <span id="well-tot">3</span></div>
+  </div>
+  <div class="segments" id="segs"></div>
+  <div class="seg-nums" id="seg-nums"></div>
+  <div class="progress-meta">
+    <div>
+      <div class="raised-big" id="raised-big">—</div>
+      <div class="raised-sub" id="raised-sub">raised toward well #1</div>
+    </div>
+    <p class="progress-note">
+      a single community well costs <strong>$15,000</strong> and serves up to
+      <strong>300 people</strong> with clean water for years.
+      every purchase from this collection goes directly to well construction.
+    </p>
+  </div>
+</div>
+
+<!-- well illustration -->
+<div class="well-section">
+  <div class="well-art">
+    <div class="well-art-lbl" id="well-label">well #1 — funding status</div>
+    <svg class="well-svg" viewBox="0 0 260 300" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <clipPath id="well-clip">
+          <rect x="60" y="100" width="140" height="160"/>
+        </clipPath>
+        <pattern id="wave-pat" x="0" y="0" width="80" height="20" patternUnits="userSpaceOnUse">
+          <path d="M0 10 Q20 0 40 10 Q60 20 80 10" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"/>
+        </pattern>
+      </defs>
+      <rect x="60" y="100" width="140" height="160" fill="#e8e6e0" stroke="#c8c6c0" stroke-width="1"/>
+      <g clip-path="url(#well-clip)">
+        <rect id="water-rect" x="60" y="260" width="140" height="0" fill="#1B6CA8"/>
+        <rect id="wave-rect" x="60" y="260" width="140" height="0" fill="url(#wave-pat)"/>
+      </g>
+      <line id="water-line" x1="55" y1="260" x2="205" y2="260" stroke="#1B6CA8" stroke-width="1.5" opacity="0"/>
+      <line x1="60" y1="130" x2="200" y2="130" stroke="#c8c6c0" stroke-width="0.5"/>
+      <line x1="60" y1="160" x2="200" y2="160" stroke="#c8c6c0" stroke-width="0.5"/>
+      <line x1="60" y1="190" x2="200" y2="190" stroke="#c8c6c0" stroke-width="0.5"/>
+      <line x1="60" y1="220" x2="200" y2="220" stroke="#c8c6c0" stroke-width="0.5"/>
+      <line x1="130" y1="100" x2="130" y2="260" stroke="#c8c6c0" stroke-width="0.5"/>
+      <rect x="48" y="90" width="164" height="16" fill="#0a0a0a"/>
+      <rect x="55" y="82" width="150" height="12" fill="#0a0a0a"/>
+      <rect x="68" y="20" width="10" height="72" fill="#0a0a0a"/>
+      <rect x="182" y="20" width="10" height="72" fill="#0a0a0a"/>
+      <rect x="63" y="18" width="134" height="8" fill="#0a0a0a"/>
+      <line x1="125" y1="26" x2="125" y2="82" stroke="#888" stroke-width="2" stroke-dasharray="4,3"/>
+      <rect x="112" y="52" width="26" height="20" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
+      <path d="M112 52 Q125 46 138 52" fill="none" stroke="#555" stroke-width="1.5"/>
+      <text id="well-pct-label" x="130" y="200" text-anchor="middle" font-family="Courier Prime, monospace" font-size="20" font-weight="700" fill="#0a0a0a" opacity="0.15">0%</text>
+    </svg>
+    <div class="to-go">
+      <span class="n" id="togo">—</span>
+      <div class="l">supporters to complete well #<span id="togo-well-num">1</span></div>
+    </div>
+  </div>
+
+  <div class="side-stats">
+    <div class="sstat blue">
+      <div class="sstat-val blue" id="s-wpct">0%</div>
+      <div class="sstat-lbl">of well #<span id="s-well-num">1</span> funded<br>($15,000 goal)</div>
+    </div>
+    <div class="sstat">
+      <div class="sstat-val" id="s-served">0</div>
+      <div class="sstat-lbl">people will receive clean water<br>when this well is complete</div>
+    </div>
+    <div class="sstat">
+      <div class="sstat-val" id="s-complete">0</div>
+      <div class="sstat-lbl">wells fully funded<br>and built</div>
+    </div>
+  </div>
+</div>
+
+<!-- scripture -->
+<div class="scripture">
+  <div class="scripture-text">"i will pour water on the thirsty land, and streams on the dry ground."</div>
+  <div class="scripture-ref">— isaiah 44:3</div>
+</div>
+
+<!-- footer -->
+<div class="footer">
+  <span class="footer-brand">this brand gives: — apparel with purpose</span>
+  <a class="footer-url" href="https://thisbrandgives.com">thisbrandgives.com</a>
+</div>
+
+<script>
+  // ── config ──
+  const DOLLARS_PER_SHIRT = 5;
+  const WELL_COST = 15000;
+  const PEOPLE_PER_WELL = 300;
+  const MAX_WELLS = 3;
+
+  function fmtMoney(n) {
+    return '$' + Math.round(n).toLocaleString('en-US');
+  }
+
+  function render({ shirts, people }) {
+    const fundsTotal = shirts * DOLLARS_PER_SHIRT;
+    const wellsComplete = Math.floor(fundsTotal / WELL_COST);
+    const fundsIntoWell = fundsTotal % WELL_COST;
+    const wellPct = (fundsIntoWell / WELL_COST) * 100;
+    const totalPct = (fundsTotal / WELL_COST) * 100;
+    const currentWellNum = wellsComplete + 1;
+    const supportersLeft = Math.max(0, Math.ceil((WELL_COST - fundsIntoWell) / DOLLARS_PER_SHIRT));
+
+    // metrics
+    document.getElementById('m-people').textContent = people.toLocaleString();
+    document.getElementById('m-funds').textContent = fmtMoney(fundsTotal);
+    document.getElementById('m-pct').textContent = totalPct.toFixed(1) + '%';
+
+    // progress
+    document.getElementById('raised-big').textContent = fmtMoney(fundsIntoWell);
+    document.getElementById('raised-sub').textContent = 'raised toward well #' + currentWellNum;
+    document.getElementById('well-cur').textContent = currentWellNum;
+    document.getElementById('well-tot').textContent = MAX_WELLS;
+
+    // segments
+    const segsEl = document.getElementById('segs');
+    const numsEl = document.getElementById('seg-nums');
+    segsEl.innerHTML = '';
+    numsEl.innerHTML = '';
+    for (let i = 0; i < MAX_WELLS; i++) {
+      const seg = document.createElement('div');
+      const num = document.createElement('div');
+      num.className = 'seg-num' + (i === wellsComplete ? ' active' : '');
+      num.textContent = 'well ' + (i + 1);
+      if (i < wellsComplete) {
+        seg.className = 'seg funded';
+        seg.innerHTML = '<div class="seg-check">funded ✓</div>';
+      } else if (i === wellsComplete) {
+        seg.className = 'seg';
+        const fill = document.createElement('div');
+        fill.className = 'seg-fill';
+        seg.appendChild(fill);
+        setTimeout(() => { fill.style.width = wellPct + '%'; }, 300);
+      } else {
+        seg.className = 'seg';
+      }
+      segsEl.appendChild(seg);
+      numsEl.appendChild(num);
+    }
+
+    // well SVG
+    const wellH = 160;
+    const fillH = (wellPct / 100) * wellH;
+    const fillY = 260 - fillH;
+    setTimeout(() => {
+      const wr = document.getElementById('water-rect');
+      const wv = document.getElementById('wave-rect');
+      const wl = document.getElementById('water-line');
+      if (wr) { wr.setAttribute('y', fillY); wr.setAttribute('height', fillH); }
+      if (wv) { wv.setAttribute('y', fillY); wv.setAttribute('height', fillH); }
+      if (wl) { wl.setAttribute('y1', fillY); wl.setAttribute('y2', fillY); wl.setAttribute('opacity', fillH > 2 ? '1' : '0'); }
+      const lbl = document.getElementById('well-pct-label');
+      if (lbl) {
+        lbl.textContent = wellPct.toFixed(0) + '%';
+        lbl.setAttribute('y', Math.max(150, fillY + 22));
+        lbl.style.opacity = wellPct > 3 ? '0.35' : '0.15';
+      }
+    }, 450);
+
+    // side stats
+    document.querySelectorAll('.s-well-num, #s-well-num').forEach(el => el.textContent = currentWellNum);
+    document.getElementById('s-wpct').textContent = wellPct.toFixed(1) + '%';
+    document.getElementById('s-served').textContent = (wellsComplete * PEOPLE_PER_WELL).toLocaleString();
+    document.getElementById('s-complete').textContent = wellsComplete;
+    document.getElementById('togo').textContent = supportersLeft.toLocaleString();
+    document.getElementById('togo-well-num').textContent = currentWellNum;
+    document.getElementById('well-label').textContent = 'well #' + currentWellNum + ' — funding status';
+
+    // timestamp
+    document.getElementById('live-updated').textContent =
+      'updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // fetch from Netlify function
+  async function loadData() {
+    try {
+      const res = await fetch('/.netlify/functions/orders');
+      if (!res.ok) throw new Error('fetch failed');
+      const data = await res.json();
+      render(data);
+    } catch (err) {
+      console.warn('Could not load live data, using fallback:', err.message);
+      render({ shirts: 1, people: 1 });
+    }
+  }
+
+  loadData();
+</script>
+</body>
+</html>
