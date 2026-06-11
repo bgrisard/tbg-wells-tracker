@@ -1,14 +1,12 @@
 // netlify/functions/orders.js
-// Fetches order data from Shopify using client credentials
-// Called by the tracker on every page load
+// Fetches order data from Shopify using client credentials grant
 
 exports.handler = async function(event, context) {
 
   const CLIENT_ID = process.env.SHOPIFY_CLIENT_ID;
   const CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET;
-  const SHOP_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN; // e.g. 93u1hd-ge.myshopify.com
+  const SHOP_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
 
-  // CORS headers so the HTML page can call this function
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -20,69 +18,81 @@ exports.handler = async function(event, context) {
   }
 
   try {
-    // Step 1: Get an access token using client credentials
+    // Correct endpoint for Dev Dashboard client credentials grant
     const tokenRes = await fetch(`https://${SHOP_DOMAIN}/admin/oauth/access_token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,
         grant_type: 'client_credentials'
-      })
+      }).toString()
     });
 
     if (!tokenRes.ok) {
-      throw new Error('Token request failed: ' + tokenRes.status);
+      const errText = await tokenRes.text();
+      throw new Error(`Token failed ${tokenRes.status}: ${errText}`);
     }
 
-    const { access_token } = await tokenRes.json();
+    const tokenData = await tokenRes.json();
+    const access_token = tokenData.access_token;
 
-    // Step 2: Fetch orders from Admin API
-    // Paginate through all paid orders
+    // Fetch orders via GraphQL Admin API
     let orders = [];
-    let url = `https://${SHOP_DOMAIN}/admin/api/2024-10/orders.json?status=any&financial_status=paid&limit=250`;
+    let cursor = null;
+    let hasNext = true;
 
-    while (url) {
-      const ordersRes = await fetch(url, {
+    while (hasNext) {
+      const query = `{
+        orders(first: 250, ${cursor ? `after: "${cursor}",` : ''} query: "financial_status:paid") {
+          pageInfo { hasNextPage endCursor }
+          edges {
+            node {
+              id
+              lineItems(first: 50) {
+                edges {
+                  node {
+                    quantity
+                    product { tags }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }`;
+
+      const res = await fetch(`https://${SHOP_DOMAIN}/admin/api/2024-10/graphql.json`, {
+        method: 'POST',
         headers: {
           'X-Shopify-Access-Token': access_token,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ query })
       });
 
-      if (!ordersRes.ok) throw new Error('Orders fetch failed: ' + ordersRes.status);
+      if (!res.ok) throw new Error('GraphQL fetch failed: ' + res.status);
 
-      const data = await ordersRes.json();
-      orders = orders.concat(data.orders || []);
+      const json = await res.json();
+      const page = json?.data?.orders;
+      if (!page) break;
 
-      // Check for next page via Link header
-      const linkHeader = ordersRes.headers.get('Link');
-      if (linkHeader && linkHeader.includes('rel="next"')) {
-        const match = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
-        url = match ? match[1] : null;
-      } else {
-        url = null;
-      }
+      orders = orders.concat(page.edges.map(e => e.node));
+      hasNext = page.pageInfo.hasNextPage;
+      cursor = page.pageInfo.endCursor;
     }
 
-    // Step 3: Count qualifying items
-    // Add your product tags to this array once you have your product list
-    // e.g. const QUALIFYING_TAGS = ['this-builds-wells'];
-    // Empty = count ALL orders
+    // Add product tags here once you have your product list
     const QUALIFYING_TAGS = [];
 
     let shirts = 0;
-    let people = orders.length;
+    const people = orders.length;
 
     orders.forEach(order => {
-      order.line_items.forEach(item => {
-        const tags = (item.properties || [])
-          .filter(p => p.name === '_tags')
-          .map(p => p.value);
-
+      order.lineItems.edges.forEach(({ node: item }) => {
+        const tags = item.product?.tags || [];
         const qualifies = QUALIFYING_TAGS.length === 0 ||
           QUALIFYING_TAGS.some(t => tags.includes(t));
-
         if (qualifies) shirts += item.quantity;
       });
     });
@@ -95,7 +105,6 @@ exports.handler = async function(event, context) {
 
   } catch (err) {
     console.error('Error:', err.message);
-    // Return fallback data so the page still renders
     return {
       statusCode: 200,
       headers,
