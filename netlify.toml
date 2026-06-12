@@ -5,5 +5,5 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    X-Frame-Options = "SAMEORIGIN"
     X-Content-Type-Options = "nosniff"
+    Content-Security-Policy = "frame-ancestors 'self' https://*.myshopify.com https://*.shopify.com https://thisbrandgives.com"
