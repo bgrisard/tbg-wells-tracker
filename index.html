@@ -436,8 +436,8 @@
     return '$' + Math.round(n).toLocaleString('en-US');
   }
 
-  function render({ shirts, people }) {
-    const fundsTotal = shirts * DOLLARS_PER_SHIRT;
+  function render({ shirts, people, fundsRaised }) {
+    const fundsTotal = (typeof fundsRaised === 'number') ? fundsRaised : shirts * DOLLARS_PER_SHIRT;
     const wellsComplete = Math.floor(fundsTotal / WELL_COST);
     const fundsIntoWell = fundsTotal % WELL_COST;
     const wellPct = (fundsIntoWell / WELL_COST) * 100;
@@ -524,7 +524,7 @@
       render(data);
     } catch (err) {
       console.warn('Could not load live data, using fallback:', err.message);
-      render({ shirts: 1, people: 1 });
+      render({ shirts: 0, people: 0, fundsRaised: 0 });
     }
   }
 
